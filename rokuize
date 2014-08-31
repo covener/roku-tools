@@ -75,12 +75,13 @@ for file in "$@"; do
     # Find surround track
     #     Stream #0:1(eng): Audio: aac (mp4a / 0x6134706D), 48000 Hz, 5.1, s16, 634 kb/s
     #     Stream #0:1(eng): Audio: dts (DTS), 48000 Hz, 5.1(side), s16, 1536 kb/s (default)
+    #     Stream #0:1(eng): Audio: dts (DTS), 48000 Hz, 5.1(side), s16, 1536 kb/s (default)=
     #     Stream #0:1: Audio: ac3 ([0] [0][0] / 0x2000), 48000 Hz, 5.1(side), s16, 384 kb/s=
 
-    if echo "$AUDIO_PROBE" | egrep "eng\(.*Audio.*[567]\.1" > /dev/null; then
-        ENGLISH_SURROUND_TRACKS=`echo "$AUDIO_PROBE" | egrep "eng\(.*Audio.*[567]\.1"`
+    if echo "$AUDIO_PROBE" | egrep "eng\).*Audio.*[567]\.1" > /dev/null; then
+        ENGLISH_SURROUND_TRACKS=`echo "$AUDIO_PROBE" | egrep "eng\).*Audio.*[567]\.1"`
         TID=`echo $ENGLISH_SURROUND_TRACKS| sed -re 's/.*#(...).*/\1/'`
-        echo "Found surround english audio: $ENGLISH_SURROUND_TRACKS=";
+        echo "Found surround english audio: $ENGLISH_SURROUND_TRACKS";
         SURROUND=1  
         ACOPY=1
     elif echo "$AUDIO_PROBE" | egrep "Audio.*[567]\.1" > /dev/null; then
