@@ -1,0 +1,167 @@
+#!/bin/sh
+
+# This script checks or converts media for the roku
+
+# Where your roku server reads from
+ROKU_DIR=$HOME/downloads/roku
+
+# ffmpeg or derivative/whatever
+FFMPEG=$HOME/bin/ffmpeg
+
+if [ $# -lt 1 ]; then
+  echo "$0 video.mkv"
+  exit 1
+fi
+
+CHECKONLY=0
+if [ $1  = "-check" ]; then
+  CHECKONLY=1
+  shift
+fi
+if [ ! -f "$1" ]; then
+  echo "$0: $1 does not exist"
+  exit 2
+fi
+
+
+for file in "$@"; do
+    file=`readlink -f $file`
+    ORIGINAL_DIRNAME=`dirname "$file"`
+    BASE=`basename "$file"`
+    OUTPUTFILE="$ROKU_DIR/${BASE%%.???}-roku.m4v"
+
+    filename=$(basename "$file")
+    extension=${filename##*.}
+
+    ##### Video stream detection ####
+    # The goal here is to decide if we can copy the video stream, which is obviously much faster and
+    # higher quality then re-encoding it. The roku seems to tolerate many flavors of mpeg4
+
+    # Random AVI:               Stream #0:0: Video: mpeg4 (mp4v / 0x7634706D), yuv420p, 720x304 [SAR 1:1 DAR 45:19], q=2-31, 1715 kb/s, 24k tbn, 23.98 tbc
+    # HQ 720p scene mkv release Stream #0:0(eng): Video: h264 (High), yuv420p, 1280x536, SAR 1:1 DAR 160:67, 23.98 fps, 23.98 tbr, 1k tbn, 47.95 tbc (default)
+    #                           Stream #0:0(eng): Video: h264 (Main), yuv420p, 636x264 [SAR 1:1 DAR 53:22], 29.97 fps, 29.97 tbr, 1k tbn, 180k tbc (default)
+
+
+    VIDEO_PROBE=`ffprobe "$file" 2>&1 | egrep "Stream #0:0.*Video"`;
+    KEEPVIDEO=0
+    if echo $VIDEO_PROBE| egrep "h264|mpeg4|mp4x|x264"; then
+      echo "Video stream will be kept: $VIDEO_PROBE"
+      KEEPVIDEO=1
+    else 
+      echo "Video stream will be encoded: $VIDEO_PROBE"
+    fi
+
+    #### Audio stream detection ####
+    # The goal here is to find english 5.1 (or better) that we can copy. Barring that,
+    # we go out of our way to find a copyable English stereo track.  
+    # Your roku has a stereo/passthrough audio configuration -- it can pass-through DTS and AC3.
+
+    AUDIO_PROBE=`ffprobe "$file" 2>&1`
+    SURROUND=0
+    MUSTDROPAUDIOTRACKS=0  # more then one will confuse roku
+    AUDIO_TRACKS=`ffprobe "$file" 2>&1|egrep "Stream #0.*Audio"`
+    AUDIO_TRACKS_CNT=0
+    TID=-1;
+    ACOPY=0
+ 
+    # Count total tracks, multiple can confuse the roku
+    if [ ! -z "$AUDIO_TRACKS" ]; then
+        AUDIO_TRACKS_CNT=`echo $AUDIO_TRACKS | wc -l`
+    fi
+    if [ $AUDIO_TRACKS_CNT -eq 1 ]; then
+        MUSTDROPAUDIOTRACKS=1
+    fi
+ 
+    # Find surround track
+    #     Stream #0:1(eng): Audio: aac (mp4a / 0x6134706D), 48000 Hz, 5.1, s16, 634 kb/s
+    #     Stream #0:1(eng): Audio: dts (DTS), 48000 Hz, 5.1(side), s16, 1536 kb/s (default)
+    #     Stream #0:1: Audio: ac3 ([0] [0][0] / 0x2000), 48000 Hz, 5.1(side), s16, 384 kb/s=
+
+    if echo "$AUDIO_PROBE" | egrep "eng\(.*Audio.*[567]\.1" > /dev/null; then
+        ENGLISH_SURROUND_TRACKS=`echo "$AUDIO_PROBE" | egrep "eng\(.*Audio.*[567]\.1"`
+        TID=`echo $ENGLISH_SURROUND_TRACKS| sed -re 's/.*#(...).*/\1/'`
+        echo "Found surround english audio: $ENGLISH_SURROUND_TRACKS=";
+        SURROUND=1  
+        ACOPY=1
+    elif echo "$AUDIO_PROBE" | egrep "Audio.*[567]\.1" > /dev/null; then
+        SURROUND_TRACKS=`echo "$AUDIO_PROBE" | egrep "Audio.*[567]\.1"`
+        TID=`echo $SURROUND_TRACKS| sed -re 's/.*#(...).*/\1/'`
+        echo "Found surround (non?)english audio: $SURROUND_TRACKS=";
+        SURROUND=1  
+        ACOPY=1
+    # Take what we can get
+    elif [ $MUSTDROPAUDIOTRACKS -eq 1 ]; then
+        AAC_AUDIO_TRACKS=`ffprobe "$file" 2>&1|egrep "Stream #0.*Audio: aac"`
+        ENGLISH_TRACKS=`ffprobe "$file" 2>&1|egrep "Stream #0.*eng.*Audio"`
+        AAC_ENGLISH_TRACKS=`ffprobe "$file" 2>&1|egrep "Stream #0.*eng.*Audio: aac"`
+
+        AAC_AUDIO_TRACKS_CNT=0
+        ENGLISH_TRACKS_CNT=0
+        AAC_ENGLISH_TRACKS_CNT=0
+        AUDIO_TRACKS_CNT=0
+
+        if [ ! -z "$AAC_AUDIO_TRACKS" ]; then
+            AAC_AUDIO_TRACKS_CNT=`echo $AAC_AUDIO_TRACKS | wc -l`
+        fi
+        if [ ! -z "$ENGLISH_TRACKS" ]; then
+            ENGLISH_TRACKS_CNT=`echo $ENGLISH_TRACKS | wc -l`
+        fi 
+        if [ ! -z "$AAC_ENGLISH_TRACKS" ]; then
+            AAC_ENGLISH_TRACKS_CNT=`echo $AAC_ENGLISH_TRACKS | wc -l`
+        fi
+
+        if [ $AAC_ENGLISH_TRACKS_CNT -eq 1 ]; then
+          TID=`echo $AAC_ENGLISH_TRACKS | sed -re 's/.*#(...).*/\1/'`
+          echo "Audio stream (AAC) will be kept"
+          ACOPY=1
+        elif [ $ENGLISH_TRACKS_CNT -eq 1 ]; then
+          TID=`echo $ENGLISH_TRACKS | sed -re 's/.*#(...).*/\1/'`
+          echo "Audio stream will be encoded"
+          ACOPY=0
+        elif [ $AAC_AUDIO_TRACKS_CNT -eq 1 ]; then
+          TID=`echo $AAC_AUDIO_TRACKS | sed -re 's/.*#(...).*/\1/'`
+          echo "Audio stream (AAC) will be kept"
+          ACOPY=1
+        else
+          # uh-oh, grab the first audio stream.
+          TID=`echo $AUDIO_TRACKS | head | sed -re 's/.*#(...).*/\1/'`
+          echo "Audio stream will be encoded"
+          ACOPY=0
+        fi
+    fi
+
+
+    if [ $CHECKONLY = "echo" ]; then
+      exit 
+    fi
+
+    rm -f "$OUTPUTFILE"
+    if [ $KEEPVIDEO -eq 1 -a $ACOPY -eq 1 ]; then
+      if [ $extension = "mkv" -o $extension = "mp4" -o $extension = "m4v" ]; then
+        echo "File started in Roku format, just hard linking"
+        ln "$file" "$OUTPUTFILE"
+      else
+        (cd "$ORIGINAL_DIRNAME" && nice $FFMPEG -i "$BASE" -map 0:0 -map $TID -c:v copy -c:a copy "$OUTPUTFILE")
+      fi
+    elif [ $KEEPVIDEO -eq 1 ]; then
+      (cd "$ORIGINAL_DIRNAME" && nice $FFMPEG -i "$BASE" -map 0:0 -map $TID -c:v copy --acodec libvo_aacenc -ab 384k -ac 2  "$OUTPUTFILE")
+    else 
+      (cd $ORIGINAL_DIRNAME && nice $FFMPEG -i "$BASE" -c:v libx264 -c:a copy -preset slow -crf 22  "$OUTPUTFILE")
+    fi
+    
+if echo $ORIGINAL_DIRNAME | grep TV > /dev/null ; then
+    case $OUTPUTFILE in
+      *eal.*ime*) TVDIR="Real Time with Bill Maher";;
+      *alifornication*) TVDIR="Californication";;
+      VICE*) TVDIR="VICE";;
+      Ray*)  TVDIR="Ray Donovan";;
+      Silicon*) TVDIR="Silicon Valley";;
+      *as*ee*) TVDIR="Last Week with John Oliver";;
+      *) TVDIR="UNKNOWN";;
+    esac
+    mkdir -p "$ROKU_DIR/TV/$TVDIR"
+    mv $OUTPUTFILE "$ROKU_DIR/TV/$TVDIR"
+  fi 
+done
+
+update-roku
