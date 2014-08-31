@@ -159,7 +159,8 @@ for file in "$@"; do
 
     rm -f "$OUTPUTFILE"
     MUSTREPACK=$MUSTDROPAUDIOTRACKS;
-    # XXX: We're really avoiding MKV here which the roku seems to have spotty support for. Just remuxing is like 2k FPS.
+    # XXX: We're really avoiding MKV here which the roku seems to have spotty support for. Just remuxing it is fast
+    # Optimization -- if ffprobe doesn't choke or report a thousand streams, try the MKV.  Requires testing.
     if [ $extension != "mp4" -a $extension != "m4v" ]; then
       MUSTREPACK=1
     fi
