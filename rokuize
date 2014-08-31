@@ -77,6 +77,8 @@ for file in "$@"; do
     #     Stream #0:1(eng): Audio: dts (DTS), 48000 Hz, 5.1(side), s16, 1536 kb/s (default)
     #     Stream #0:1(eng): Audio: dts (DTS), 48000 Hz, 5.1(side), s16, 1536 kb/s (default)=
     #     Stream #0:1: Audio: ac3 ([0] [0][0] / 0x2000), 48000 Hz, 5.1(side), s16, 384 kb/s=
+    #    Stream #0:1(eng): Audio: ac3, 48000 Hz, stereo, s16, 224 kb/s (default)
+
 
     if echo "$AUDIO_PROBE" | egrep "eng\).*Audio.*[567]\.1" > /dev/null; then
         ENGLISH_SURROUND_TRACKS=`echo "$AUDIO_PROBE" | egrep "eng\).*Audio.*[567]\.1"`
@@ -93,8 +95,10 @@ for file in "$@"; do
     # Take what we can get
     elif [ $MUSTDROPAUDIOTRACKS -eq 1 ]; then
         AAC_AUDIO_TRACKS=`ffprobe "$file" 2>&1|egrep "Stream #0.*Audio: aac"`
+        AC3_AUDIO_TRACKS=`ffprobe "$file" 2>&1|egrep "Stream #0.*Audio: ac3"`
         ENGLISH_TRACKS=`ffprobe "$file" 2>&1|egrep "Stream #0.*eng.*Audio"`
         AAC_ENGLISH_TRACKS=`ffprobe "$file" 2>&1|egrep "Stream #0.*eng.*Audio: aac"`
+        AC3_ENGLISH_TRACKS=`ffprobe "$file" 2>&1|egrep "Stream #0.*eng.*Audio: ac3"`
 
         AAC_AUDIO_TRACKS_CNT=0
         ENGLISH_TRACKS_CNT=0
@@ -104,16 +108,28 @@ for file in "$@"; do
         if [ ! -z "$AAC_AUDIO_TRACKS" ]; then
             AAC_AUDIO_TRACKS_CNT=`echo $AAC_AUDIO_TRACKS | wc -l`
         fi
+        if [ ! -z "$AC3_AUDIO_TRACKS" ]; then
+            AC3_AUDIO_TRACKS_CNT=`echo $AC3_AUDIO_TRACKS | wc -l`
+        fi
         if [ ! -z "$ENGLISH_TRACKS" ]; then
             ENGLISH_TRACKS_CNT=`echo $ENGLISH_TRACKS | wc -l`
         fi 
         if [ ! -z "$AAC_ENGLISH_TRACKS" ]; then
             AAC_ENGLISH_TRACKS_CNT=`echo $AAC_ENGLISH_TRACKS | wc -l`
         fi
+        if [ ! -z "$AC3_ENGLISH_TRACKS" ]; then
+            AC3_ENGLISH_TRACKS_CNT=`echo $AC3_ENGLISH_TRACKS | wc -l`
+        fi
+
+
 
         if [ $AAC_ENGLISH_TRACKS_CNT -eq 1 ]; then
           TID=`echo $AAC_ENGLISH_TRACKS | sed -re 's/.*#(...).*/\1/'`
           echo "Audio stream (AAC) will be kept"
+          ACOPY=1
+        elif [ $AC3_ENGLISH_TRACKS_CNT -eq 1 ]; then
+          TID=`echo $AC3_ENGLISH_TRACKS | sed -re 's/.*#(...).*/\1/'`
+          echo "Audio stream (AC3 stereo?) will be kept"
           ACOPY=1
         elif [ $ENGLISH_TRACKS_CNT -eq 1 ]; then
           TID=`echo $ENGLISH_TRACKS | sed -re 's/.*#(...).*/\1/'`
@@ -122,6 +138,10 @@ for file in "$@"; do
         elif [ $AAC_AUDIO_TRACKS_CNT -eq 1 ]; then
           TID=`echo $AAC_AUDIO_TRACKS | sed -re 's/.*#(...).*/\1/'`
           echo "Audio stream (AAC) will be kept"
+          ACOPY=1
+        elif [ $AC3_AUDIO_TRACKS_CNT -eq 1 ]; then
+          TID=`echo $AC3_AUDIO_TRACKS | sed -re 's/.*#(...).*/\1/'`
+          echo "Audio stream (AC3) will be kept"
           ACOPY=1
         else
           # uh-oh, grab the first audio stream.
