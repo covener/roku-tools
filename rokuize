@@ -9,7 +9,7 @@ ROKU_DIR=$HOME/downloads/roku
 FFMPEG=$HOME/bin/ffmpeg
 
 if [ $# -lt 1 ]; then
-  echo "$0 video.mkv"
+  echo "$0 video.???"
   exit 1
 fi
 
@@ -69,6 +69,7 @@ for file in "$@"; do
         AUDIO_TRACKS_CNT=`echo $AUDIO_TRACKS | wc -l`
     fi
     if [ $AUDIO_TRACKS_CNT -eq 1 ]; then
+        # Even if we had a match, having multiples means we must remux
         MUSTDROPAUDIOTRACKS=1
     fi
  
@@ -77,7 +78,7 @@ for file in "$@"; do
     #     Stream #0:1(eng): Audio: dts (DTS), 48000 Hz, 5.1(side), s16, 1536 kb/s (default)
     #     Stream #0:1(eng): Audio: dts (DTS), 48000 Hz, 5.1(side), s16, 1536 kb/s (default)=
     #     Stream #0:1: Audio: ac3 ([0] [0][0] / 0x2000), 48000 Hz, 5.1(side), s16, 384 kb/s=
-    #    Stream #0:1(eng): Audio: ac3, 48000 Hz, stereo, s16, 224 kb/s (default)
+    #     Stream #0:1(eng): Audio: ac3, 48000 Hz, stereo, s16, 224 kb/s (default)
 
 
     if echo "$AUDIO_PROBE" | egrep "eng\).*Audio.*[567]\.1" > /dev/null; then
@@ -157,9 +158,15 @@ for file in "$@"; do
     fi
 
     rm -f "$OUTPUTFILE"
+    MUSTREPACK=$MUSTDROPAUDIOTRACKS;
+    # XXX: We're really avoiding MKV here which the roku seems to have spotty support for
+    if [ $extension != "mp4" -a $extension != "m4v" ]; then
+      MUSTREPACK=1
+    fi
+
     if [ $KEEPVIDEO -eq 1 -a $ACOPY -eq 1 ]; then
-      if [ $extension = "mkv" -o $extension = "mp4" -o $extension = "m4v" ]; then
-        echo "File started in Roku format, just hard linking"
+      if [ ! $MUSTREPACK ];  then
+        echo "File started in Roku-compliant format, just hard linking"
         ln "$file" "$OUTPUTFILE"
       else
         (cd "$ORIGINAL_DIRNAME" && nice $FFMPEG -i "$BASE" -map 0:0 -map $TID -c:v copy -c:a copy "$OUTPUTFILE")
