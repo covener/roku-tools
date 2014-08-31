@@ -14,7 +14,7 @@ if [ $# -lt 1 ]; then
 fi
 
 CHECKONLY=0
-if [ $1  = "-check" ]; then
+if [ "$1" = "-check" ]; then
   CHECKONLY=1
   shift
 fi
@@ -25,7 +25,7 @@ fi
 
 
 for file in "$@"; do
-    file=`readlink -f $file`
+    file=`readlink -f "$file"`
     ORIGINAL_DIRNAME=`dirname "$file"`
     BASE=`basename "$file"`
     OUTPUTFILE="$ROKU_DIR/${BASE%%.???}-roku.mp4"
@@ -102,8 +102,10 @@ for file in "$@"; do
         AC3_ENGLISH_TRACKS=`ffprobe "$file" 2>&1|egrep "Stream #0.*eng.*Audio: ac3"`
 
         AAC_AUDIO_TRACKS_CNT=0
+        AC3_AUDIO_TRACKS_CNT=0
         ENGLISH_TRACKS_CNT=0
         AAC_ENGLISH_TRACKS_CNT=0
+        AC3_ENGLISH_TRACKS_CNT=0
         AUDIO_TRACKS_CNT=0
 
         if [ ! -z "$AAC_AUDIO_TRACKS" ]; then
@@ -121,8 +123,6 @@ for file in "$@"; do
         if [ ! -z "$AC3_ENGLISH_TRACKS" ]; then
             AC3_ENGLISH_TRACKS_CNT=`echo $AC3_ENGLISH_TRACKS | wc -l`
         fi
-
-
 
         if [ $AAC_ENGLISH_TRACKS_CNT -eq 1 ]; then
           TID=`echo $AAC_ENGLISH_TRACKS | sed -re 's/.*#(...).*/\1/'`
@@ -173,7 +173,7 @@ for file in "$@"; do
         (cd "$ORIGINAL_DIRNAME" && nice $FFMPEG -i "$BASE" -map 0:0 -map $TID -c:v copy -c:a copy "$OUTPUTFILE")
       fi
     elif [ $KEEPVIDEO -eq 1 ]; then
-      (cd "$ORIGINAL_DIRNAME" && nice $FFMPEG -i "$BASE" -map 0:0 -map $TID -c:v copy --acodec libvo_aacenc -ab 384k -ac 2  "$OUTPUTFILE")
+      (cd "$ORIGINAL_DIRNAME" && nice $FFMPEG -i "$BASE" -map 0:0 -map $TID -c:v copy -c:a libvo_aacenc -ab 384k -ac 2  "$OUTPUTFILE")
     else 
       (cd $ORIGINAL_DIRNAME && nice $FFMPEG -i "$BASE" -c:v libx264 -c:a copy -preset slow -crf 22  "$OUTPUTFILE")
     fi
@@ -190,7 +190,7 @@ if echo $ORIGINAL_DIRNAME | grep TV > /dev/null ; then
     esac
     mkdir -p "$ROKU_DIR/TV/$TVDIR"
     mv $OUTPUTFILE "$ROKU_DIR/TV/$TVDIR"
-  fi 
+fi 
 done
 
 update-roku
