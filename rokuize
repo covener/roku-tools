@@ -28,7 +28,7 @@ for file in "$@"; do
     file=`readlink -f $file`
     ORIGINAL_DIRNAME=`dirname "$file"`
     BASE=`basename "$file"`
-    OUTPUTFILE="$ROKU_DIR/${BASE%%.???}-roku.m4v"
+    OUTPUTFILE="$ROKU_DIR/${BASE%%.???}-roku.mp4"
 
     filename=$(basename "$file")
     extension=${filename##*.}
@@ -159,7 +159,7 @@ for file in "$@"; do
 
     rm -f "$OUTPUTFILE"
     MUSTREPACK=$MUSTDROPAUDIOTRACKS;
-    # XXX: We're really avoiding MKV here which the roku seems to have spotty support for
+    # XXX: We're really avoiding MKV here which the roku seems to have spotty support for. Just remuxing is like 2k FPS.
     if [ $extension != "mp4" -a $extension != "m4v" ]; then
       MUSTREPACK=1
     fi
